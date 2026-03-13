@@ -96,7 +96,11 @@ class Settings(BaseSettings):
     def allowed_user_ids(self) -> set[int]:
         if not self.telegram_allowed_user_ids:
             return set()
-        return {int(uid.strip()) for uid in self.telegram_allowed_user_ids.split(",") if uid.strip()}
+        return {
+            int(uid.strip())
+            for uid in self.telegram_allowed_user_ids.split(",")
+            if uid.strip()
+        }
 
     def ensure_staging_dir(self) -> Path:
         p = Path(self.staging_dir)

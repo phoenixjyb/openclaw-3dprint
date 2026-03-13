@@ -18,8 +18,6 @@ log = logging.getLogger(__name__)
 
 async def _send_via_ftp(job: PrintJob, settings: Settings) -> None:
     """Upload .3mf via FTPS and start print via MQTT — direct to printer."""
-    from pathlib import Path
-
     from pipeline.services.bambu_printer import start_print_mqtt, upload_file_ftp
 
     sliced_path = job.artifacts.sliced_file_path

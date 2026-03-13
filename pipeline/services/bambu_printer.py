@@ -110,7 +110,8 @@ async def start_print_mqtt(
         import threading
         evt = threading.Event()
 
-        orig_set = connected.set
+        orig_set = connected.set  # noqa: F841
+
         def _notify():
             evt.set()
         connected.set = _notify
@@ -143,7 +144,6 @@ async def monitor_print_mqtt(
     from pipeline.services.bambu_mqtt import PrintStatus
 
     latest_status = {"value": PrintStatus()}
-    finished = asyncio.Event()
     error_holder: list[str] = []
 
     def _monitor():
