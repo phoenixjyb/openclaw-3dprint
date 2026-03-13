@@ -1,3 +1,5 @@
+**English** | [中文](README_ZH.md)
+
 # 🖨 openclaw-3dprint
 
 **Turn chat messages into physical 3D prints — fully automated.**
@@ -252,3 +254,9 @@ network as the machine running the pipeline.
 ## License
 
 MIT — see [pyproject.toml](pyproject.toml).
+
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system architecture, supported printers, pipeline routes, and fallback strategies.
+
+[中文架构文档](docs/ARCHITECTURE_ZH.md)
