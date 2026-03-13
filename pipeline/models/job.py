@@ -30,7 +30,7 @@ class JobStage(str, enum.Enum):
 
 # Valid stage transitions
 _TRANSITIONS: dict[JobStage, list[JobStage]] = {
-    JobStage.PENDING: [JobStage.INTERPRETING, JobStage.CANCELLED],
+    JobStage.PENDING: [JobStage.INTERPRETING, JobStage.GENERATING, JobStage.CANCELLED],
     JobStage.INTERPRETING: [JobStage.AWAITING_INTERPRET_APPROVAL, JobStage.FAILED],
     JobStage.AWAITING_INTERPRET_APPROVAL: [
         JobStage.GENERATING, JobStage.INTERPRETING, JobStage.CANCELLED,

@@ -120,10 +120,15 @@ class FeishuBot:
                 {"error": "missing 'prompt' field"}, status=400
             )
 
+        # If the caller (e.g. an OpenClaw agent) already enriched the prompt,
+        # pass it through to skip the built-in LLM interpretation stage.
+        enriched_prompt = body.get("enriched_prompt", "").strip() or None
+
         job = self.orchestrator.create_job(
             user_id=0,
             chat_id=0,
             raw_request=prompt,
+            enriched_prompt=enriched_prompt,
         )
 
         asyncio.create_task(self.orchestrator.run_pipeline(job))

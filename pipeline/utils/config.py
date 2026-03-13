@@ -38,8 +38,11 @@ class Settings(BaseSettings):
     feishu_chat_id: str = Field(default="")
     feishu_api_port: int = Field(default=8765)
 
-    # ── LLM (OpenAI-compatible) ───────────────────────────────────
-    openai_api_key: str = Field(description="LLM API key")
+    # ── LLM (OpenAI-compatible, optional if agent provides enriched prompts) ─
+    openai_api_key: str = Field(
+        default="",
+        description="LLM API key (optional if your OpenClaw agent enriches prompts)",
+    )
     openai_base_url: str = Field(
         default="https://api.openai.com/v1",
         description="API base URL",

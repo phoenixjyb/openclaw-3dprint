@@ -86,14 +86,21 @@ while waiting.
 
 ## Typical Agent Interaction
 
-When a user says "3D print me a dragon":
+When a user says "3D print me a dragon", you (the agent) should:
 
-1. Agent runs `3dprint request a dragon`
-2. Pipeline returns job ID and starts LLM enrichment
-3. Agent shows the enriched prompt and asks user to approve: `3dprint approve <id>`
-4. After each approval, the next stage runs automatically
-5. When printing starts, the agent reports progress via MQTT updates
-6. User receives a "print complete" notification
+1. **Enrich the prompt yourself** — you already have an LLM. Turn "a dragon" into a detailed
+   3D modeling description (shape, pose, proportions, style, scale ~120mm, material PLA).
+2. Call the API with both fields:
+   ```bash
+   curl -X POST http://127.0.0.1:8765/api/print \
+     -H 'Content-Type: application/json' \
+     -d '{"prompt": "a dragon", "enriched_prompt": "A fierce Western dragon in a rearing pose, wings spread wide..."}'
+   ```
+   This **skips the built-in LLM step** — no separate LLM API key needed.
+3. If you send only `prompt` (no `enriched_prompt`), the pipeline uses its own LLM
+   (requires `OPENAI_API_KEY` in config).
+4. After each stage, show the result and ask user to approve: `3dprint approve <id>`
+5. When printing starts, report progress via MQTT updates
 
 ## Requirements
 

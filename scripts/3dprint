@@ -20,15 +20,29 @@ shift || true
 
 case "$cmd" in
     request|print|r)
+        # Support --enriched "detailed prompt" before the description
+        enriched=""
+        if [ "$1" = "--enriched" ]; then
+            shift
+            enriched="$1"
+            shift
+        fi
         prompt="$*"
         if [ -z "$prompt" ]; then
             echo "Error: provide a description. Example: 3dprint request a small vase"
             exit 1
         fi
         echo "🖨 Submitting print request: $prompt"
-        result=$(curl -s -X POST "$API_BASE/print" \
-            -H 'Content-Type: application/json' \
-            -d "{\"prompt\": \"$prompt\"}")
+        if [ -n "$enriched" ]; then
+            echo "   (with pre-enriched prompt — LLM step will be skipped)"
+            result=$(curl -s -X POST "$API_BASE/print" \
+                -H 'Content-Type: application/json' \
+                -d "{\"prompt\": \"$prompt\", \"enriched_prompt\": \"$enriched\"}")
+        else
+            result=$(curl -s -X POST "$API_BASE/print" \
+                -H 'Content-Type: application/json' \
+                -d "{\"prompt\": \"$prompt\"}")
+        fi
         echo "$result" | python3 -m json.tool 2>/dev/null || echo "$result"
         ;;
 
@@ -72,7 +86,8 @@ case "$cmd" in
 🖨 OpenClaw 3D Print CLI
 
 Commands:
-  3dprint request <description>  — Submit a new 3D print request
+  3dprint request <description>                    — Submit a new 3D print request (uses built-in LLM)
+  3dprint request --enriched "detailed prompt" <d>  — Submit with pre-enriched prompt (skips LLM)
   3dprint approve <job_id>       — Approve the current pipeline stage
   3dprint reject <job_id>        — Reject/cancel the current stage
   3dprint status [job_id]        — Show job status (all jobs or specific)

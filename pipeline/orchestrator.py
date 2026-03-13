@@ -39,10 +39,14 @@ class Orchestrator:
         self._approval_futures: dict[str, asyncio.Future] = {}
         self.printer_queue = printer_queue or get_printer_queue()
 
-    def create_job(self, user_id: int, chat_id: int, raw_request: str) -> PrintJob:
+    def create_job(self, user_id: int, chat_id: int, raw_request: str,
+                   enriched_prompt: str | None = None) -> PrintJob:
         job = PrintJob(user_id=user_id, chat_id=chat_id, raw_request=raw_request)
+        if enriched_prompt:
+            job.artifacts.enriched_prompt = enriched_prompt
+            job.artifacts.object_name = raw_request[:80]
         self.jobs[job.id] = job
-        log.info("Created job %s: %r", job.id, raw_request)
+        log.info("Created job %s: %r (enriched=%s)", job.id, raw_request, bool(enriched_prompt))
         return job
 
     async def resolve_approval(self, job_id: str, approved: bool) -> None:
@@ -74,21 +78,34 @@ class Orchestrator:
         try:
             slicer_mode = self.settings.slicer_mode.lower()
 
-            await self.send_message(
-                job.chat_id,
-                f"🚀 *Starting pipeline for job `{job.id}`*\n\n"
-                f"Request: _{job.raw_request}_\n\n"
-                f"Mode: slicer={slicer_mode}\n"
-                f"Stage 1: LLM interpretation…",
-            )
+            # ── Stage: LLM Interpretation (skipped if enriched prompt provided) ──
+            if job.artifacts.enriched_prompt:
+                log.info("Job %s: skipping LLM — enriched prompt already provided", job.id)
+                await self.send_message(
+                    job.chat_id,
+                    f"🚀 *Starting pipeline for job `{job.id}`*\n\n"
+                    f"Request: _{job.raw_request}_\n\n"
+                    f"Mode: slicer={slicer_mode}\n"
+                    f"Using pre-enriched prompt (LLM step skipped).\n"
+                    f"Stage 1: Generating 3D model…",
+                )
+            else:
+                await self.send_message(
+                    job.chat_id,
+                    f"🚀 *Starting pipeline for job `{job.id}`*\n\n"
+                    f"Request: _{job.raw_request}_\n\n"
+                    f"Mode: slicer={slicer_mode}\n"
+                    f"Stage 1: LLM interpretation…",
+                )
 
-            # ── Stage: LLM Interpretation ────────────────────────────
-            summary = await llm_interpret.run(job, self.settings)
-            approved = await self._wait_for_approval(job, summary)
-            if not approved:
-                job.advance(JobStage.CANCELLED)
-                await self.send_message(job.chat_id, f"❌ Job `{job.id}` cancelled at LLM stage.")
-                return
+                summary = await llm_interpret.run(job, self.settings)
+                approved = await self._wait_for_approval(job, summary)
+                if not approved:
+                    job.advance(JobStage.CANCELLED)
+                    await self.send_message(
+                        job.chat_id, f"❌ Job `{job.id}` cancelled at LLM stage."
+                    )
+                    return
 
             # ── Stage: 3D Model Generation ───────────────────────────
             await self.send_message(job.chat_id, "Stage 2: Generating 3D model… ⏳")
