@@ -48,7 +48,7 @@ Result: Physical object on your print bed 🎉
 | **Python** | ≥ 3.11 | `brew install python@3.12` or [python.org](https://www.python.org/downloads/) |
 | **PrusaSlicer** | any | `brew install --cask prusa-slicer` (macOS) or [download](https://www.prusa3d.com/page/prusaslicer_424/) |
 | **Bambu Lab printer** | any | Must be on the same LAN with LAN mode enabled |
-| **LLM API key** | — | [xAI/Grok](https://console.x.ai) (recommended) or [OpenAI](https://platform.openai.com/api-keys) |
+| **LLM API key** | — | Any OpenAI-compatible provider: [OpenAI](https://platform.openai.com/api-keys), [xAI/Grok](https://console.x.ai), [Anthropic](https://console.anthropic.com/), etc. |
 | **Tripo3D API key** | — | Sign up at [tripo3d.ai](https://www.tripo3d.ai) → Dashboard → API Keys |
 | **A chat channel** | — | Pick one: [Telegram BotFather](https://t.me/BotFather), [Feishu](https://open.feishu.cn/app), or just the HTTP API |
 
@@ -101,8 +101,8 @@ Edit `~/.openclaw-3dprint/pipeline.env` with your settings:
 ```env
 # LLM (any OpenAI-compatible API)
 OPENAI_API_KEY=your-key
-OPENAI_BASE_URL=https://api.x.ai/v1
-OPENAI_MODEL=grok-3
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o
 
 # 3D model generation
 TRIPO_API_KEY=your-tripo-key
