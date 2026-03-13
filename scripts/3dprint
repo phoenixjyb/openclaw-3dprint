@@ -1,0 +1,103 @@
+#!/bin/bash
+# 3dprint — CLI wrapper for the OpenClaw 3D Print pipeline API.
+# Used by agents or humans to submit and manage print jobs.
+#
+# Usage:
+#   3dprint request "a small cinderella figurine"
+#   3dprint approve <job_id>
+#   3dprint reject <job_id>
+#   3dprint status [job_id]
+#   3dprint queue
+#   3dprint help
+
+set -euo pipefail
+
+API_PORT="${OPENCLAW_3DPRINT_PORT:-8765}"
+API_BASE="http://127.0.0.1:${API_PORT}/api"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+    request|print|r)
+        prompt="$*"
+        if [ -z "$prompt" ]; then
+            echo "Error: provide a description. Example: 3dprint request a small vase"
+            exit 1
+        fi
+        echo "🖨 Submitting print request: $prompt"
+        result=$(curl -s -X POST "$API_BASE/print" \
+            -H 'Content-Type: application/json' \
+            -d "{\"prompt\": \"$prompt\"}")
+        echo "$result" | python3 -m json.tool 2>/dev/null || echo "$result"
+        ;;
+
+    approve|a)
+        job_id="${1:-}"
+        if [ -z "$job_id" ]; then
+            echo "Error: provide job_id. Example: 3dprint approve abc123"
+            exit 1
+        fi
+        echo "✅ Approving job $job_id"
+        result=$(curl -s -X POST "$API_BASE/jobs/$job_id/approve")
+        echo "$result" | python3 -m json.tool 2>/dev/null || echo "$result"
+        ;;
+
+    reject|x)
+        job_id="${1:-}"
+        if [ -z "$job_id" ]; then
+            echo "Error: provide job_id. Example: 3dprint reject abc123"
+            exit 1
+        fi
+        echo "❌ Rejecting job $job_id"
+        result=$(curl -s -X POST "$API_BASE/jobs/$job_id/reject")
+        echo "$result" | python3 -m json.tool 2>/dev/null || echo "$result"
+        ;;
+
+    status|s)
+        job_id="${1:-}"
+        if [ -n "$job_id" ]; then
+            curl -s "$API_BASE/jobs/$job_id" | python3 -m json.tool 2>/dev/null
+        else
+            curl -s "$API_BASE/jobs" | python3 -m json.tool 2>/dev/null
+        fi
+        ;;
+
+    queue|q)
+        curl -s "$API_BASE/health" | python3 -m json.tool 2>/dev/null
+        ;;
+
+    help|h|--help|-h)
+        cat <<'EOF'
+🖨 OpenClaw 3D Print CLI
+
+Commands:
+  3dprint request <description>  — Submit a new 3D print request
+  3dprint approve <job_id>       — Approve the current pipeline stage
+  3dprint reject <job_id>        — Reject/cancel the current stage
+  3dprint status [job_id]        — Show job status (all jobs or specific)
+  3dprint queue                  — Show printer queue status
+  3dprint help                   — Show this help
+
+Environment:
+  OPENCLAW_3DPRINT_PORT          — API port (default: 8765)
+
+Examples:
+  3dprint request a small cinderella figurine
+  3dprint approve abc12345
+  3dprint status
+
+The pipeline stages are:
+  1. LLM prompt enrichment         → needs approval
+  2. 3D model generation (Tripo3D) → needs approval
+  3. File transfer (remote only)   → needs approval
+  4. Slicing (local or remote)     → needs approval
+  5. Printing on Bambu printer     → auto
+EOF
+        ;;
+
+    *)
+        echo "Unknown command: $cmd. Run '3dprint help' for usage."
+        exit 1
+        ;;
+esac

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openclaw-3dprint"
+version = "0.1.0"
+description = "OpenClaw skill: Text-to-3D-Print pipeline — turn natural language into physical objects"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "OpenClawy Contributors" }]
+keywords = ["3d-printing", "openclaw", "bambu", "ai", "pipeline"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Printing",
+]
+dependencies = [
+    "aiohttp>=3.9",
+    "httpx>=0.27",
+    "openai>=1.30",
+    "paho-mqtt>=2.0",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.2",
+    "tripo3d>=1.0",
+]
+
+[project.optional-dependencies]
+telegram = ["python-telegram-bot>=22.0"]
+windows = ["paramiko>=3.4"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
+
+[project.scripts]
+openclaw-3dprint = "pipeline.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["pipeline*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
