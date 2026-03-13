@@ -43,18 +43,16 @@ Result: Physical object on your print bed 🎉
 
 ## Prerequisites
 
-Before setup, you'll need:
+| Requirement | Version | How to get it |
+|-------------|---------|---------------|
+| **Python** | ≥ 3.11 | `brew install python@3.12` or [python.org](https://www.python.org/downloads/) |
+| **PrusaSlicer** | any | `brew install --cask prusa-slicer` (macOS) or [download](https://www.prusa3d.com/page/prusaslicer_424/) |
+| **Bambu Lab printer** | any | Must be on the same LAN with LAN mode enabled |
+| **LLM API key** | — | [xAI/Grok](https://console.x.ai) (recommended) or [OpenAI](https://platform.openai.com/api-keys) |
+| **Tripo3D API key** | — | Sign up at [tripo3d.ai](https://www.tripo3d.ai) → Dashboard → API Keys |
+| **A chat channel** | — | Pick one: [Telegram BotFather](https://t.me/BotFather), [Feishu](https://open.feishu.cn/app), or just the HTTP API |
 
-1. **A Bambu Lab printer** on your local network with LAN mode enabled
-2. **An LLM API key** — [xAI/Grok](https://console.x.ai) (recommended), [OpenAI](https://platform.openai.com/api-keys), or any OpenAI-compatible provider
-3. **A Tripo3D API key** — sign up at [tripo3d.ai](https://www.tripo3d.ai), go to Dashboard → API Keys
-4. **PrusaSlicer** installed — `brew install --cask prusa-slicer` on macOS
-5. **A chat channel** (pick one):
-   - **Telegram**: message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token
-   - **Feishu/Lark**: [open.feishu.cn/app](https://open.feishu.cn/app) → Create App → enable Bot
-   - **OpenClaw agent**: just use the HTTP API, no extra setup
-
-> 💡 **Finding your printer info:** On the printer's LCD screen, go to Settings → Network for the IP and Access Code, and Settings → Device for the Serial Number.
+> 💡 **Finding your printer info:** On the printer's LCD screen, go to **Settings → Network** for the IP and Access Code, and **Settings → Device** for the Serial Number.
 
 ## Quick Start
 
@@ -64,12 +62,23 @@ Before setup, you'll need:
 pip install openclaw-3dprint
 ```
 
-Or with optional extras:
+Or from source:
+
+```bash
+git clone https://github.com/phoenixjyb/openclaw-3dprint.git
+cd openclaw-3dprint
+pip install -e .
+```
+
+Optional extras:
 
 ```bash
 pip install "openclaw-3dprint[telegram]"     # + Telegram bot support
-pip install "openclaw-3dprint[dev]"          # + testing/linting tools
+pip install "openclaw-3dprint[windows]"      # + remote Windows slicing via SSH
+pip install "openclaw-3dprint[dev]"          # + pytest, ruff for development
 ```
+
+> If you prefer `requirements.txt`: `pip install -r requirements.txt`
 
 ### 2. Install PrusaSlicer (for local slicing)
 
