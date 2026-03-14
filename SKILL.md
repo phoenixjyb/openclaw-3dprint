@@ -1,6 +1,6 @@
 ---
 name: 3dprint
-description: Turn natural language into 3D prints on a Bambu Lab printer. Use when the user asks to 3D print something, check printer status, or manage print jobs. Orchestrates LLM prompt enrichment, 3D model generation (Tripo3D), slicing (PrusaSlicer), and direct printer communication (FTPS/MQTT).
+description: Turn natural language into 3D prints on a Bambu Lab printer. ONLY activate when the user EXPLICITLY asks to 3D print, make, or fabricate a physical object. Do NOT activate for general questions, design discussions, or unrelated requests.
 homepage: https://github.com/phoenixjyb/openclaw-3dprint
 metadata:
   {
@@ -83,6 +83,18 @@ See `.env.example` for the full list.
 Multiple agents/users share one printer safely. The pipeline uses cross-process locking
 (`fcntl.flock`) so concurrent print requests are serialised. Users see their queue position
 while waiting.
+
+## When to Activate
+
+**ONLY** trigger this skill when the user's message contains a clear intent to 3D print a physical object. Look for explicit keywords:
+
+- ✅ Trigger: "3D print me a …", "print out a …", "打印一个…", "帮我打一个…", "make me a … on the printer"
+- ✅ Trigger: "check print status", "printer queue", "打印状态"
+- ❌ Do NOT trigger: "what does a dragon look like", "design a vase" (discussion, not printing)
+- ❌ Do NOT trigger: "print this document", "print the report" (paper printing, not 3D)
+- ❌ Do NOT trigger: any message without explicit 3D print / 打印 intent
+
+When in doubt, **ask the user** "Would you like me to 3D print this?" rather than triggering the pipeline.
 
 ## Typical Agent Interaction
 
