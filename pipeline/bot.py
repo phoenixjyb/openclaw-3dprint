@@ -13,8 +13,6 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
-    MessageHandler,
-    filters,
 )
 
 from pipeline.orchestrator import Orchestrator
@@ -48,7 +46,6 @@ def create_bot(settings: Settings) -> Application:
     app.add_handler(CommandHandler("status", _cmd_status))
     app.add_handler(CommandHandler("cancel", _cmd_cancel))
     app.add_handler(CallbackQueryHandler(_callback_approval, pattern=r"^(approve|reject):"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _msg_print_request))
 
     return app
 
@@ -104,10 +101,11 @@ async def _cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     _bot_app = context.application
     await update.message.reply_text(
         "🖨 *OpenClaw 3D Print Pipeline*\n\n"
-        "Send me a description of what you want to 3D print, or use:\n"
-        "  /print <description>\n"
+        "Use `/print <description>` to start a 3D print job.\n\n"
+        "Commands:\n"
+        "  /print <description> — start a print job\n"
         "  /status — check active jobs\n"
-        "  /cancel <job_id> — cancel a job\n"
+        "  /cancel <job\\_id> — cancel a job\n"
         "  /help — show this message",
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -130,28 +128,6 @@ async def _cmd_print(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     text = " ".join(context.args) if context.args else ""
     if not text:
         await update.message.reply_text("Usage: /print <what you want to 3D print>")
-        return
-
-    job = orch.create_job(
-        user_id=update.effective_user.id,
-        chat_id=update.effective_chat.id,
-        raw_request=text,
-    )
-    asyncio.create_task(orch.run_pipeline(job))
-
-
-async def _msg_print_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Treat any plain text message as a print request."""
-    global _bot_app
-    _bot_app = context.application
-    settings: Settings = context.bot_data["settings"]
-    orch: Orchestrator = context.bot_data["orchestrator"]
-
-    if not _check_auth(settings, update.effective_user.id):
-        return
-
-    text = update.message.text.strip()
-    if not text:
         return
 
     job = orch.create_job(
