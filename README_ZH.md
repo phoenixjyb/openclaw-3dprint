@@ -186,9 +186,6 @@ openclaw-3dprint --mode dual
 | `FEISHU_CHAT_ID` | 条件* | — | *使用飞书模式时必填 |
 | `FEISHU_API_PORT` | 否 | `8765` | HTTP API 端口 |
 | `STAGING_DIR` | 否 | `~/.openclaw-3dprint/staging` | 临时文件目录 |
-| `HTTPS_PROXY` | 否 | — | HTTP 代理地址（如 `http://127.0.0.1:7890`）。在 Telegram API 被屏蔽的地区需要设置 |
-
-> 💡 **中国用户提示：** Telegram API 在国内被屏蔽。请在启动脚本或 `pipeline.env` 中设置 `HTTPS_PROXY` / `HTTP_PROXY` 指向本地代理（ClashX、v2ray 等）。示例见 `scripts/run-pipeline.zsh`。
 
 ## 远程 Windows 切片（可选）
 

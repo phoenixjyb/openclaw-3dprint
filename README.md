@@ -186,9 +186,6 @@ If you use [OpenClaw](https://openclaw.ai), this package works as a skill:
 | `FEISHU_CHAT_ID` | Yes* | — | *If using feishu mode |
 | `FEISHU_API_PORT` | No | `8765` | HTTP API port |
 | `STAGING_DIR` | No | `~/.openclaw-3dprint/staging` | Temp file directory |
-| `HTTPS_PROXY` | No | — | HTTP proxy URL (e.g. `http://127.0.0.1:7890`). Needed if Telegram API is blocked in your region |
-
-> 💡 **Users in China:** Telegram API is blocked. Set `HTTPS_PROXY` / `HTTP_PROXY` to your local proxy (ClashX, v2ray, etc.) in your launcher script or `pipeline.env`. See `scripts/run-pipeline.zsh` for an example.
 
 ## Remote Windows Slicing (Optional)
 
