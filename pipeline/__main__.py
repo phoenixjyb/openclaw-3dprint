@@ -47,10 +47,31 @@ async def _run_dual(settings, log) -> None:
     """Run Telegram bot + HTTP API server together in one event loop."""
     from aiohttp import web
 
-    from pipeline.bot import create_bot
+    from pipeline.bot import (
+        _request_approval,
+        _send_message,
+        _send_photo,
+        create_bot,
+    )
     from pipeline.feishu_bot import FeishuBot
+    from pipeline.orchestrator import Orchestrator
 
     tg_app = create_bot(settings)
+
+    # In dual mode we don't use run_polling(), so post_init never fires.
+    # Manually create the orchestrator and wire it up.
+    import pipeline.bot as _bot_mod
+    _bot_mod._bot_app = tg_app  # so send_message/send_photo/request_approval can use it
+
+    orch = Orchestrator(
+        settings=settings,
+        send_message=_send_message,
+        send_photo=_send_photo,
+        request_approval=_request_approval,
+    )
+    tg_app.bot_data["orchestrator"] = orch
+    tg_app.bot_data["settings"] = settings
+    tg_app.bot_data["app"] = tg_app
 
     has_feishu = bool(
         settings.feishu_app_id
