@@ -21,7 +21,7 @@ class FeishuClient:
         self.app_secret = app_secret
         self._token: str = ""
         self._token_expires: float = 0
-        self._http = httpx.AsyncClient(timeout=30)
+        self._http = httpx.AsyncClient(timeout=30, proxy=None)
 
     async def _ensure_token(self) -> str:
         if self._token and time.time() < self._token_expires - 60:

@@ -99,6 +99,10 @@ class Settings(BaseSettings):
         default=25,
         description="Notify every N% progress (0 to disable progress updates)",
     )
+    printer_mqtt_proxy_port: int = Field(
+        default=0,
+        description="If >0, connect to localhost:PORT instead of printer IP (for macOS network workaround)",
+    )
 
     # ── Pipeline behaviour ────────────────────────────────────────
     staging_dir: str = Field(

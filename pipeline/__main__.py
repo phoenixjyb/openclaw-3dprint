@@ -99,12 +99,34 @@ async def _run_dual(settings, log) -> None:
 
     # Start printer monitor (persistent MQTT listener for all prints)
     monitor = None
+    mqtt_proxy_proc = None
     if (
         settings.printer_monitor_enabled
         and settings.bambu_printer_ip
         and settings.bambu_printer_serial
         and settings.bambu_printer_access_code
     ):
+        # Start MQTT proxy if configured (workaround for macOS local network restrictions)
+        if settings.printer_mqtt_proxy_port:
+            import subprocess
+            import pathlib
+            proxy_script = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "mqtt-proxy.py"
+            if proxy_script.exists():
+                mqtt_proxy_proc = subprocess.Popen(
+                    ["/usr/bin/python3", str(proxy_script)],
+                    env={
+                        **__import__("os").environ,
+                        "PRINTER_IP": settings.bambu_printer_ip,
+                        "LOCAL_PORT": str(settings.printer_mqtt_proxy_port),
+                    },
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                await asyncio.sleep(0.5)  # let proxy bind
+                log.info("MQTT proxy started (pid=%d, port=%d)", mqtt_proxy_proc.pid, settings.printer_mqtt_proxy_port)
+            else:
+                log.warning("MQTT proxy script not found at %s", proxy_script)
+
         chat_id = settings.monitor_chat_id
         if chat_id:
             from pipeline.services.printer_monitor import PrinterMonitor
@@ -127,6 +149,7 @@ async def _run_dual(settings, log) -> None:
                 notify_chat_id=chat_id,
                 send_message=_monitor_notify,
                 progress_interval=settings.printer_monitor_progress_pct,
+                mqtt_proxy_port=settings.printer_mqtt_proxy_port,
             )
             await monitor.start()
             tg_app.bot_data["printer_monitor"] = monitor
@@ -154,6 +177,10 @@ async def _run_dual(settings, log) -> None:
     finally:
         if monitor:
             await monitor.stop()
+        if mqtt_proxy_proc:
+            mqtt_proxy_proc.terminate()
+            mqtt_proxy_proc.wait(timeout=5)
+            log.info("MQTT proxy stopped")
         await tg_app.updater.stop()
         await tg_app.stop()
         await tg_app.shutdown()

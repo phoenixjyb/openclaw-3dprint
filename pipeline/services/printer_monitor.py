@@ -298,6 +298,7 @@ class PrinterMonitor:
         notify_chat_id: int,
         send_message: NotifyFn,
         progress_interval: int = 25,
+        mqtt_proxy_port: int = 0,
     ):
         self.printer_ip = printer_ip
         self.serial = serial
@@ -305,6 +306,7 @@ class PrinterMonitor:
         self.chat_id = notify_chat_id
         self.send_message = send_message
         self.progress_interval = progress_interval
+        self.mqtt_proxy_port = mqtt_proxy_port
 
         self._client = None
         self._prev_state: str = ""
@@ -344,7 +346,19 @@ class PrinterMonitor:
 
         self._client.reconnect_delay_set(min_delay=5, max_delay=120)
 
-        log.info("Printer monitor connecting to %s:8883 …", self.printer_ip)
+        # Determine connection target (proxy or direct)
+        if self.mqtt_proxy_port:
+            self._mqtt_host = "127.0.0.1"
+            self._mqtt_port = self.mqtt_proxy_port
+            log.info(
+                "Printer monitor connecting via proxy 127.0.0.1:%d → %s:8883 …",
+                self.mqtt_proxy_port, self.printer_ip,
+            )
+        else:
+            self._mqtt_host = self.printer_ip
+            self._mqtt_port = 8883
+            log.info("Printer monitor connecting to %s:8883 …", self.printer_ip)
+
         self._client.loop_start()
         # Try initial connection — if printer is asleep, retry in background
         asyncio.ensure_future(self._connect_with_retry())
@@ -358,7 +372,7 @@ class PrinterMonitor:
                 await asyncio.get_event_loop().run_in_executor(
                     None,
                     lambda: self._client.connect(
-                        self.printer_ip, 8883, keepalive=60
+                        self._mqtt_host, self._mqtt_port, keepalive=60
                     ),
                 )
                 log.info("Printer monitor MQTT connection initiated")
