@@ -108,17 +108,29 @@ async def _run_dual(settings, log) -> None:
         chat_id = settings.monitor_chat_id
         if chat_id:
             from pipeline.services.printer_monitor import PrinterMonitor
+
+            # Broadcast notifications to both Telegram and Feishu
+            if has_feishu:
+                async def _monitor_notify(cid: int, text: str) -> None:
+                    await _send_message(cid, text)
+                    try:
+                        await feishu_bot._send_message(cid, text)
+                    except Exception:
+                        log.debug("Feishu monitor notify failed", exc_info=True)
+            else:
+                _monitor_notify = _send_message
+
             monitor = PrinterMonitor(
                 printer_ip=settings.bambu_printer_ip,
                 serial=settings.bambu_printer_serial,
                 access_code=settings.bambu_printer_access_code,
                 notify_chat_id=chat_id,
-                send_message=_send_message,
+                send_message=_monitor_notify,
                 progress_interval=settings.printer_monitor_progress_pct,
             )
             await monitor.start()
             tg_app.bot_data["printer_monitor"] = monitor
-            log.info("Printer monitor started (notify chat_id=%d)", chat_id)
+            log.info("Printer monitor started (notify chat_id=%d, feishu=%s)", chat_id, has_feishu)
         else:
             log.warning("Printer monitor enabled but no chat_id configured")
     else:
