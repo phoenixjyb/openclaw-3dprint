@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-API_PORT="${OPENCLAW_3DPRINT_PORT:-8765}"
+API_PORT="${OPENCLAW_3DPRINT_PORT:-8766}"
 API_BASE="http://127.0.0.1:${API_PORT}/api"
 
 cmd="${1:-help}"
