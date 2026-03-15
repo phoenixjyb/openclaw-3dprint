@@ -44,6 +44,7 @@ def create_bot(settings: Settings) -> Application:
     app.add_handler(CommandHandler("help", _cmd_help))
     app.add_handler(CommandHandler("print", _cmd_print))
     app.add_handler(CommandHandler("status", _cmd_status))
+    app.add_handler(CommandHandler("printer", _cmd_printer))
     app.add_handler(CommandHandler("cancel", _cmd_cancel))
     app.add_handler(CallbackQueryHandler(_callback_approval, pattern=r"^(approve|reject):"))
 
@@ -105,6 +106,7 @@ async def _cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         "Commands:\n"
         "  /print <description> — start a print job\n"
         "  /status — check active jobs\n"
+        "  /printer — live printer status\n"
         "  /cancel <job\\_id> — cancel a job\n"
         "  /help — show this message",
         parse_mode=ParseMode.MARKDOWN,
@@ -152,6 +154,54 @@ async def _cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         "\n\n---\n\n".join(lines),
         parse_mode=ParseMode.MARKDOWN,
     )
+
+
+async def _cmd_printer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Query live printer status via the monitor's MQTT connection."""
+    settings: Settings = context.bot_data["settings"]
+    if not _check_auth(settings, update.effective_user.id):
+        await update.message.reply_text("⛔ Unauthorized.")
+        return
+
+    monitor = context.bot_data.get("printer_monitor")
+    if not monitor:
+        await update.message.reply_text("Printer monitor not running.")
+        return
+
+    snap = await monitor.request_status()
+    if not snap:
+        await update.message.reply_text("No data from printer yet — it may be off or unreachable.")
+        return
+
+    msg = (
+        f"🖨 *Printer Status*\n"
+        f"State: {snap.state_emoji}\n"
+        f"🌡️ {snap.format_temps()}\n"
+        f"📶 WiFi: {snap.wifi_signal}\n"
+    )
+    if snap.state.upper() == "RUNNING":
+        from pipeline.services.printer_monitor import _progress_bar
+        bar = _progress_bar(snap.progress)
+        h, m = divmod(snap.remaining_time_min, 60)
+        eta = f"{h}h {m}m" if h else f"{m} min"
+        msg += (
+            f"\n📄 {snap.job_name}\n"
+            f"{bar} {snap.progress:.0f}%\n"
+            f"📊 Layer {snap.layer}/{snap.total_layers}\n"
+            f"⏱️ Remaining: {eta}\n"
+        )
+    elif snap.state.upper() == "FINISH":
+        msg += f"\n📄 Last job: {snap.job_name}\n"
+
+    ams = snap.format_ams()
+    if ams:
+        msg += f"\n🎨 *AMS Filament:*\n{ams}\n"
+
+    hms = snap.format_hms()
+    if hms:
+        msg += f"\n🔔 *Alerts:*\n{hms}\n"
+
+    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 
 async def _cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

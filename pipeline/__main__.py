@@ -97,6 +97,33 @@ async def _run_dual(settings, log) -> None:
     await tg_app.updater.start_polling(drop_pending_updates=True)
     log.info("Telegram bot polling started")
 
+    # Start printer monitor (persistent MQTT listener for all prints)
+    monitor = None
+    if (
+        settings.printer_monitor_enabled
+        and settings.bambu_printer_ip
+        and settings.bambu_printer_serial
+        and settings.bambu_printer_access_code
+    ):
+        chat_id = settings.monitor_chat_id
+        if chat_id:
+            from pipeline.services.printer_monitor import PrinterMonitor
+            monitor = PrinterMonitor(
+                printer_ip=settings.bambu_printer_ip,
+                serial=settings.bambu_printer_serial,
+                access_code=settings.bambu_printer_access_code,
+                notify_chat_id=chat_id,
+                send_message=_send_message,
+                progress_interval=settings.printer_monitor_progress_pct,
+            )
+            await monitor.start()
+            tg_app.bot_data["printer_monitor"] = monitor
+            log.info("Printer monitor started (notify chat_id=%d)", chat_id)
+        else:
+            log.warning("Printer monitor enabled but no chat_id configured")
+    else:
+        log.info("Printer monitor disabled or missing printer config")
+
     if has_feishu:
         try:
             await feishu_bot.feishu.send_text(
@@ -113,6 +140,8 @@ async def _run_dual(settings, log) -> None:
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
+        if monitor:
+            await monitor.stop()
         await tg_app.updater.stop()
         await tg_app.stop()
         await tg_app.shutdown()
@@ -200,12 +229,39 @@ def _setup_http_api(http_app, tg_app, settings):
             "request": job.raw_request, "summary": job.summary(),
         })
 
+    async def _handle_printer_status(request):
+        monitor = tg_app.bot_data.get("printer_monitor")
+        if not monitor:
+            return web.json_response({"error": "printer monitor not running"}, status=503)
+        snap = await monitor.request_status()
+        if not snap:
+            return web.json_response({"error": "no data from printer"}, status=503)
+        return web.json_response({
+            "state": snap.state,
+            "progress": snap.progress,
+            "layer": snap.layer,
+            "total_layers": snap.total_layers,
+            "remaining_time_min": snap.remaining_time_min,
+            "job_name": snap.job_name,
+            "nozzle_temp": snap.nozzle_temp,
+            "nozzle_target": snap.nozzle_target,
+            "bed_temp": snap.bed_temp,
+            "bed_target": snap.bed_target,
+            "wifi_signal": snap.wifi_signal,
+            "ams_trays": [
+                {"slot": s + 1, "type": t, "brand": b, "color": c, "remain": r}
+                for s, t, b, c, r in snap.ams_trays
+            ],
+            "hms_alerts": [{"attr": a, "code": c} for a, c in snap.hms_alerts],
+        })
+
     http_app.router.add_get("/api/health", _handle_health)
     http_app.router.add_post("/api/print", _handle_print)
     http_app.router.add_post("/api/jobs/{job_id}/approve", _handle_approve)
     http_app.router.add_post("/api/jobs/{job_id}/reject", _handle_reject)
     http_app.router.add_get("/api/jobs", _handle_list_jobs)
     http_app.router.add_get("/api/jobs/{job_id}", _handle_job_status)
+    http_app.router.add_get("/api/printer", _handle_printer_status)
 
 
 if __name__ == "__main__":

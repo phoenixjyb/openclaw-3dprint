@@ -86,6 +86,20 @@ class Settings(BaseSettings):
         description="'ftp' (direct FTPS from Mac) or 'studio' (Bambu Studio CLI on Windows)",
     )
 
+    # ── Printer monitor ───────────────────────────────────────────
+    printer_monitor_enabled: bool = Field(
+        default=True,
+        description="Run persistent MQTT listener to notify on all prints (pipeline or manual)",
+    )
+    printer_monitor_chat_id: str = Field(
+        default="",
+        description="Telegram chat ID for monitor notifications (defaults to first allowed user)",
+    )
+    printer_monitor_progress_pct: int = Field(
+        default=25,
+        description="Notify every N% progress (0 to disable progress updates)",
+    )
+
     # ── Pipeline behaviour ────────────────────────────────────────
     staging_dir: str = Field(
         default=str(Path.home() / ".openclaw-3dprint" / "staging"),
@@ -104,6 +118,14 @@ class Settings(BaseSettings):
             for uid in self.telegram_allowed_user_ids.split(",")
             if uid.strip()
         }
+
+    @property
+    def monitor_chat_id(self) -> int | None:
+        """Chat ID for printer monitor notifications."""
+        if self.printer_monitor_chat_id:
+            return int(self.printer_monitor_chat_id.strip())
+        ids = self.allowed_user_ids
+        return next(iter(ids)) if ids else None
 
     def ensure_staging_dir(self) -> Path:
         p = Path(self.staging_dir)
