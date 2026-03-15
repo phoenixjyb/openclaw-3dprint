@@ -7,7 +7,7 @@ metadata:
     "openclaw":
       {
         "emoji": "🖨",
-        "os": ["macos", "linux"],
+        "os": ["darwin", "linux"],
         "requires": { "bins": ["3dprint"] },
         "install":
           [
