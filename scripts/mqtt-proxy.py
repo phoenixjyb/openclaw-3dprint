@@ -19,7 +19,6 @@ import os
 import select
 import signal
 import socket
-import sys
 import threading
 
 PRINTER_IP = os.environ.get("PRINTER_IP", os.environ.get("BAMBU_PRINTER_IP", "192.168.0.102"))
@@ -27,14 +26,11 @@ PRINTER_PORT = int(os.environ.get("PRINTER_PORT", "8883"))
 LOCAL_PORT = int(os.environ.get("LOCAL_PORT", "18883"))
 BUFSIZE = 8192
 
-_shutdown = threading.Event()
-
-
-def _relay(label: str, src: socket.socket, dst: socket.socket) -> None:
+def _relay(label, src, dst):
     """Forward bytes from *src* to *dst* until either side closes."""
     try:
-        while not _shutdown.is_set():
-            ready, _, _ = select.select([src], [], [], 1.0)
+        while True:
+            ready, _, _ = select.select([src], [], [], 2.0)
             if ready:
                 data = src.recv(BUFSIZE)
                 if not data:
@@ -42,31 +38,30 @@ def _relay(label: str, src: socket.socket, dst: socket.socket) -> None:
                 dst.sendall(data)
     except (OSError, BrokenPipeError):
         pass
-    finally:
-        try:
-            src.close()
-        except OSError:
-            pass
-        try:
-            dst.close()
-        except OSError:
-            pass
+    try:
+        src.close()
+    except OSError:
+        pass
+    try:
+        dst.close()
+    except OSError:
+        pass
 
 
-def _handle_client(client_sock: socket.socket, addr: tuple) -> None:
+def _handle_client(client_sock, addr):
     """Connect to the printer and relay traffic for one client.
 
     This is a transparent TCP proxy — bytes pass through unmodified.
     paho-mqtt handles TLS end-to-end through the tunnel.
     """
-    print(f"[mqtt-proxy] new client {addr} → {PRINTER_IP}:{PRINTER_PORT}")
+    print(f"[mqtt-proxy] new client {addr} → {PRINTER_IP}:{PRINTER_PORT}", flush=True)
     try:
         remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         remote.settimeout(10)
         remote.connect((PRINTER_IP, PRINTER_PORT))
         remote.settimeout(None)
     except Exception as exc:
-        print(f"[mqtt-proxy] failed to reach printer: {exc}")
+        print(f"[mqtt-proxy] failed to reach printer: {exc}", flush=True)
         client_sock.close()
         return
 
@@ -76,21 +71,25 @@ def _handle_client(client_sock: socket.socket, addr: tuple) -> None:
     t2.start()
     t1.join()
     t2.join()
-    print(f"[mqtt-proxy] session closed for {addr}")
+    print(f"[mqtt-proxy] session closed for {addr}", flush=True)
 
 
-def main() -> None:
-    signal.signal(signal.SIGTERM, lambda *_: _shutdown.set())
-    signal.signal(signal.SIGINT, lambda *_: _shutdown.set())
+def main():
+    def _stop(sig, frame):
+        print("[mqtt-proxy] stopping", flush=True)
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(("127.0.0.1", LOCAL_PORT))
     srv.listen(4)
     srv.settimeout(1.0)
-    print(f"[mqtt-proxy] listening on 127.0.0.1:{LOCAL_PORT} → {PRINTER_IP}:{PRINTER_PORT}")
+    print(f"[mqtt-proxy] listening on 127.0.0.1:{LOCAL_PORT} → {PRINTER_IP}:{PRINTER_PORT}", flush=True)
 
-    while not _shutdown.is_set():
+    while True:
         try:
             client, addr = srv.accept()
         except socket.timeout:
@@ -100,7 +99,7 @@ def main() -> None:
         threading.Thread(target=_handle_client, args=(client, addr), daemon=True).start()
 
     srv.close()
-    print("[mqtt-proxy] stopped")
+    print("[mqtt-proxy] stopped", flush=True)
 
 
 if __name__ == "__main__":

@@ -119,8 +119,8 @@ async def _run_dual(settings, log) -> None:
                         "PRINTER_IP": settings.bambu_printer_ip,
                         "LOCAL_PORT": str(settings.printer_mqtt_proxy_port),
                     },
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
                 await asyncio.sleep(0.5)  # let proxy bind
                 log.info("MQTT proxy started (pid=%d, port=%d)", mqtt_proxy_proc.pid, settings.printer_mqtt_proxy_port)
