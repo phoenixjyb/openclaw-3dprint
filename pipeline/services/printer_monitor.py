@@ -345,11 +345,35 @@ class PrinterMonitor:
         self._client.reconnect_delay_set(min_delay=5, max_delay=120)
 
         log.info("Printer monitor connecting to %s:8883 …", self.printer_ip)
-        try:
-            self._client.connect_async(self.printer_ip, 8883, keepalive=60)
-            self._client.loop_start()
-        except Exception as e:
-            log.error("Printer monitor failed to start: %s", e)
+        self._client.loop_start()
+        # Try initial connection — if printer is asleep, retry in background
+        asyncio.ensure_future(self._connect_with_retry())
+
+    async def _connect_with_retry(self, max_attempts: int = 0) -> None:
+        """Try to connect, retrying on failure (printer may be asleep)."""
+        attempt = 0
+        while self._running:
+            attempt += 1
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self._client.connect(
+                        self.printer_ip, 8883, keepalive=60
+                    ),
+                )
+                log.info("Printer monitor MQTT connection initiated")
+                return
+            except Exception as e:
+                delay = min(30 * attempt, 120)
+                log.warning(
+                    "Printer monitor connect attempt %d failed: %s "
+                    "(retry in %ds)",
+                    attempt, e, delay,
+                )
+                if max_attempts and attempt >= max_attempts:
+                    log.error("Printer monitor giving up after %d attempts", attempt)
+                    return
+                await asyncio.sleep(delay)
 
     async def stop(self) -> None:
         self._running = False
