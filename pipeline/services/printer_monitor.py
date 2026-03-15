@@ -337,17 +337,10 @@ class PrinterMonitor:
             client_id=f"monitor_{int(time.time())}",
         )
         self._client.username_pw_set("bblp", self.access_code)
-        self._client.tls_set(cert_reqs=ssl.CERT_NONE)
-        self._client.tls_insecure_set(True)
-
-        self._client.on_connect = self._on_connect
-        self._client.on_disconnect = self._on_disconnect
-        self._client.on_message = self._on_message
-
-        self._client.reconnect_delay_set(min_delay=5, max_delay=120)
 
         # Determine connection target (proxy or direct)
         if self.mqtt_proxy_port:
+            # Proxy handles TLS — connect plain TCP to localhost
             self._mqtt_host = "127.0.0.1"
             self._mqtt_port = self.mqtt_proxy_port
             log.info(
@@ -355,9 +348,17 @@ class PrinterMonitor:
                 self.mqtt_proxy_port, self.printer_ip,
             )
         else:
+            # Direct connection — need TLS
+            self._client.tls_set(cert_reqs=ssl.CERT_NONE)
+            self._client.tls_insecure_set(True)
             self._mqtt_host = self.printer_ip
             self._mqtt_port = 8883
             log.info("Printer monitor connecting to %s:8883 …", self.printer_ip)
+
+        self._client.on_connect = self._on_connect
+        self._client.on_disconnect = self._on_disconnect
+        self._client.on_message = self._on_message
+        self._client.reconnect_delay_set(min_delay=5, max_delay=120)
 
         self._client.loop_start()
         # Try initial connection — if printer is asleep, retry in background

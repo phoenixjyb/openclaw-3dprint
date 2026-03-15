@@ -1,24 +1,24 @@
 #!/usr/bin/env /usr/bin/python3
-"""TCP proxy: localhost:LOCAL_PORT → PRINTER_IP:8883
+"""TLS-terminating TCP proxy: localhost:LOCAL_PORT (plain) → PRINTER_IP:8883 (TLS)
 
-Works around macOS Local Network Privacy restrictions that block
+Works around macOS Local Network Privacy + SSL restrictions that block
 Homebrew-installed Python from reaching LAN devices.  This script
 runs under /usr/bin/python3 (Apple-signed, exempt from the restriction)
-and simply relays bytes in both directions.
+and terminates TLS — clients connect with plain TCP.
 
 Usage
 -----
-    /usr/bin/python3 scripts/mqtt-proxy.py                 # defaults
+    /usr/bin/python3 scripts/mqtt-proxy.py
     PRINTER_IP=192.168.0.102 LOCAL_PORT=18883 /usr/bin/python3 scripts/mqtt-proxy.py
 
-The pipeline's printer-monitor connects to localhost:18883 instead of
-the printer IP directly.
+The pipeline's printer-monitor connects to localhost:18883 with TLS disabled.
 """
 
 import os
 import select
 import signal
 import socket
+import ssl
 import threading
 
 PRINTER_IP = os.environ.get("PRINTER_IP", os.environ.get("BAMBU_PRINTER_IP", "192.168.0.102"))
@@ -49,17 +49,23 @@ def _relay(label, src, dst):
 
 
 def _handle_client(client_sock, addr):
-    """Connect to the printer and relay traffic for one client.
+    """Connect to the printer (TLS) and relay decrypted traffic for one client.
 
-    This is a transparent TCP proxy — bytes pass through unmodified.
-    paho-mqtt handles TLS end-to-end through the tunnel.
+    Client side: plain TCP (no TLS).
+    Printer side: TLS (terminated by this proxy).
     """
     print(f"[mqtt-proxy] new client {addr} → {PRINTER_IP}:{PRINTER_PORT}", flush=True)
     try:
-        remote = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        remote.settimeout(10)
-        remote.connect((PRINTER_IP, PRINTER_PORT))
+        raw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        raw.settimeout(10)
+        raw.connect((PRINTER_IP, PRINTER_PORT))
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        remote = ctx.wrap_socket(raw)
         remote.settimeout(None)
+        print("[mqtt-proxy] TLS connected to printer", flush=True)
     except Exception as exc:
         print(f"[mqtt-proxy] failed to reach printer: {exc}", flush=True)
         client_sock.close()
