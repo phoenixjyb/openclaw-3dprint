@@ -267,7 +267,48 @@ Telegram 消息 → 内置 LLM 提示词优化
 
 ---
 
-## 11. 文件流转
+## 11. 多用户部署
+
+同一台 macOS 主机上的多个用户账户可以各自运行独立的 pipeline 实例，安全共享一台打印机。
+
+### 端口隔离
+
+每个用户的 pipeline 监听不同的 HTTP 端口。`3dprint` CLI（人类和 OpenClaw 网关代理共用）通过环境变量 `OPENCLAW_3DPRINT_PORT` 找到正确的实例。
+
+| macOS 账户 | Bot 模式 | HTTP 端口 | CLI 如何解析 |
+|-----------|----------|-----------|-------------|
+| ybcc | Telegram | 8766 | CLI 默认值 (`8766`) — 无需设置环境变量 |
+| chuan | Feishu | 8765 | `~/.zshenv` 中 `OPENCLAW_3DPRINT_PORT=8765` |
+
+在 pipeline 的 env 文件中设置端口（`FEISHU_API_PORT` 或 `TELEGRAM_API_PORT`），如果与 CLI 默认值 (8766) 不同，在 `~/.zshenv` 中导出 `OPENCLAW_3DPRINT_PORT`，以确保非交互 shell（包括 OpenClaw 网关启动的进程）能继承该设置。
+
+### 每账户组件
+
+每个 macOS 账户运行各自的 launchd agent：
+
+| 组件 | launchd 标签 | 说明 |
+|------|-------------|------|
+| OpenClaw 网关 | `ai.openclaw.gateway` | 各自的 `~/.openclaw/` 配置 |
+| Pipeline Bot | `com.openclawy.pipeline-bot` | 独立 venv、独立 `pipeline.env` |
+| MQTT 代理 | `com.openclaw-3dprint.mqtt-proxy` | 如需运行打印机监控则必须部署 |
+
+### 共享资源
+
+- **打印机**：一台物理打印机，先发先得。跨进程文件锁 (`fcntl.flock`) 保证并发打印请求的串行化。
+- **MQTT 代理**：两个账户可同时订阅打印机 MQTT 消息流，各自独立监控并发送通知到不同渠道（Telegram / 飞书）。
+- **`3dprint` CLI**：安装在 `/opt/homebrew/bin/`，所有账户共用，通过环境变量区分端口。
+
+### 添加新用户
+
+1. 创建 `~/.openclaw-3dprint/pipeline.env`（或 `~/.openclawy/private/pipeline.env`），设置唯一的 `FEISHU_API_PORT` 或 `TELEGRAM_API_PORT`。
+2. 如果端口不是 8766，在 `~/.zshenv` 中添加 `export OPENCLAW_3DPRINT_PORT=<port>`。
+3. 在新账户的 `~/Library/LaunchAgents/` 下部署 pipeline 和 MQTT 代理的 launchd plist。
+4. 在新账户的 OpenClaw 工作区中注册 `3dprint` skill。
+5. 重启 OpenClaw 网关使新环境变量生效。
+
+---
+
+## 12. 文件流转
 
 ```
 用户提示词 (文本)

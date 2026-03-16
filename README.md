@@ -205,6 +205,18 @@ The pipeline will SSH to the Windows machine, slice there, and copy back the res
 Multiple users/agents can share one printer safely. The pipeline uses cross-process file locking
 (`fcntl.flock`) to serialise print jobs. Users see their queue position while waiting.
 
+### Multi-Account Deployment (macOS)
+
+Multiple macOS accounts can each run their own pipeline instance on the same machine:
+
+- Each account uses a **different HTTP port** (`FEISHU_API_PORT` / `TELEGRAM_API_PORT`)
+- The `3dprint` CLI resolves the correct port via `OPENCLAW_3DPRINT_PORT` env var (default: 8766)
+- If your port differs from 8766, add `export OPENCLAW_3DPRINT_PORT=<port>` to `~/.zshenv`
+- Each account has its own launchd agents, venv, `pipeline.env`, and notification channel
+- The printer is shared — `fcntl.flock` prevents concurrent prints
+
+See [ARCHITECTURE.md §11](docs/ARCHITECTURE.md) for the full multi-user setup guide.
+
 ## Printer Monitor & Notifications
 
 A background monitor subscribes to the printer's MQTT feed and sends real-time notifications for *all* print events — whether triggered by the pipeline or started manually.

@@ -267,7 +267,48 @@ Pipeline (brew Python)  ──plain TCP──▶  MQTT Proxy (system Python)  �
 
 ---
 
-## 11. File Flow
+## 11. Multi-User Deployment
+
+Multiple macOS user accounts can each run their own pipeline instance on the same machine, sharing one physical printer safely.
+
+### Port Isolation
+
+Each user's pipeline listens on a different HTTP port. The `3dprint` CLI (used by both humans and OpenClaw gateway agents) finds the correct instance via the `OPENCLAW_3DPRINT_PORT` environment variable.
+
+| macOS Account | Bot Mode | HTTP Port | How CLI resolves |
+|---------------|----------|-----------|-----------------|
+| ybcc | Telegram | 8766 | CLI default (`8766`) — no env var needed |
+| chuan | Feishu | 8765 | `OPENCLAW_3DPRINT_PORT=8765` in `~/.zshenv` |
+
+Set the port in the pipeline's env file (`FEISHU_API_PORT` or `TELEGRAM_API_PORT`) and, if it differs from the CLI default (8766), export `OPENCLAW_3DPRINT_PORT` in `~/.zshenv` so non-interactive shells (including those spawned by the OpenClaw gateway) inherit it.
+
+### Per-Account Components
+
+Each macOS account runs its own set of launchd agents:
+
+| Component | launchd label | Notes |
+|-----------|--------------|-------|
+| OpenClaw Gateway | `ai.openclaw.gateway` | Separate config in `~/.openclaw/` |
+| Pipeline Bot | `com.openclawy.pipeline-bot` | Own venv, own `pipeline.env` |
+| MQTT Proxy | `com.openclaw-3dprint.mqtt-proxy` | Required if account runs printer monitor |
+
+### Shared Resources
+
+- **Printer**: One physical printer, accessed by whichever pipeline sends a job first. Cross-process file locking (`fcntl.flock`) serialises concurrent print requests across accounts.
+- **MQTT broker**: Both accounts can subscribe to the printer's MQTT feed. Each monitors independently and notifies its own channel (Telegram / Feishu).
+- **`3dprint` CLI**: Installed once in `/opt/homebrew/bin/`, shared by all accounts. Port routing is per-user via environment.
+
+### Adding a New User
+
+1. Create `~/.openclaw-3dprint/pipeline.env` (or `~/.openclawy/private/pipeline.env`) with a unique `FEISHU_API_PORT` or `TELEGRAM_API_PORT`.
+2. If the port differs from 8766, add `export OPENCLAW_3DPRINT_PORT=<port>` to `~/.zshenv`.
+3. Deploy the pipeline and MQTT proxy launchd plists under the new account's `~/Library/LaunchAgents/`.
+4. Register the `3dprint` skill in the new account's OpenClaw workspace.
+5. Restart the OpenClaw gateway to pick up the new environment.
+
+---
+
+## 12. File Flow
 
 ```
 User prompt (text)
