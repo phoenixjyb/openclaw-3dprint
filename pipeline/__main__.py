@@ -99,36 +99,21 @@ async def _run_dual(settings, log) -> None:
 
     # Start printer monitor (persistent MQTT listener for all prints)
     monitor = None
-    mqtt_proxy_proc = None
+    mqtt_proxy_proc = None  # noqa: F841 — kept for future use if launchd not available
     if (
         settings.printer_monitor_enabled
         and settings.bambu_printer_ip
         and settings.bambu_printer_serial
         and settings.bambu_printer_access_code
     ):
-        # Start MQTT proxy if configured (workaround for macOS local network restrictions)
+        # MQTT proxy must run as a separate launchd agent (not subprocess)
+        # due to macOS Local Network Privacy inheriting restrictions to children.
+        # See: com.openclaw-3dprint.mqtt-proxy.plist
         if settings.printer_mqtt_proxy_port:
-            import subprocess
-            import pathlib
-            proxy_script = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "mqtt-proxy.py"
-            if proxy_script.exists():
-                proxy_log = pathlib.Path.home() / "Library" / "Logs" / "openclaw-3dprint" / "mqtt-proxy.log"
-                proxy_log.parent.mkdir(parents=True, exist_ok=True)
-                proxy_log_fh = open(proxy_log, "a")
-                mqtt_proxy_proc = subprocess.Popen(
-                    ["/usr/bin/python3", str(proxy_script)],
-                    env={
-                        **__import__("os").environ,
-                        "PRINTER_IP": settings.bambu_printer_ip,
-                        "LOCAL_PORT": str(settings.printer_mqtt_proxy_port),
-                    },
-                    stdout=proxy_log_fh,
-                    stderr=proxy_log_fh,
-                )
-                await asyncio.sleep(1.0)  # let proxy bind
-                log.info("MQTT proxy started (pid=%d, port=%d)", mqtt_proxy_proc.pid, settings.printer_mqtt_proxy_port)
-            else:
-                log.warning("MQTT proxy script not found at %s", proxy_script)
+            log.info(
+                "Expecting MQTT proxy on 127.0.0.1:%d (managed by launchd)",
+                settings.printer_mqtt_proxy_port,
+            )
 
         chat_id = settings.monitor_chat_id
         if chat_id:
@@ -180,10 +165,6 @@ async def _run_dual(settings, log) -> None:
     finally:
         if monitor:
             await monitor.stop()
-        if mqtt_proxy_proc:
-            mqtt_proxy_proc.terminate()
-            mqtt_proxy_proc.wait(timeout=5)
-            log.info("MQTT proxy stopped")
         await tg_app.updater.stop()
         await tg_app.stop()
         await tg_app.shutdown()
