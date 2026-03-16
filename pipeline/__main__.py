@@ -112,6 +112,9 @@ async def _run_dual(settings, log) -> None:
             import pathlib
             proxy_script = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "mqtt-proxy.py"
             if proxy_script.exists():
+                proxy_log = pathlib.Path.home() / "Library" / "Logs" / "openclaw-3dprint" / "mqtt-proxy.log"
+                proxy_log.parent.mkdir(parents=True, exist_ok=True)
+                proxy_log_fh = open(proxy_log, "a")
                 mqtt_proxy_proc = subprocess.Popen(
                     ["/usr/bin/python3", str(proxy_script)],
                     env={
@@ -119,10 +122,10 @@ async def _run_dual(settings, log) -> None:
                         "PRINTER_IP": settings.bambu_printer_ip,
                         "LOCAL_PORT": str(settings.printer_mqtt_proxy_port),
                     },
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=proxy_log_fh,
+                    stderr=proxy_log_fh,
                 )
-                await asyncio.sleep(0.5)  # let proxy bind
+                await asyncio.sleep(1.0)  # let proxy bind
                 log.info("MQTT proxy started (pid=%d, port=%d)", mqtt_proxy_proc.pid, settings.printer_mqtt_proxy_port)
             else:
                 log.warning("MQTT proxy script not found at %s", proxy_script)
