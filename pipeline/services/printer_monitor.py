@@ -406,11 +406,11 @@ class PrinterMonitor:
             req = {"pushing": {"sequence_id": "0", "command": "pushall"}}
             client.publish(f"device/{self.serial}/request", json.dumps(req))
         else:
-            log.error("Printer monitor MQTT connect failed: rc=%d", rc)
+            log.error("Printer monitor MQTT connect failed: rc=%s", rc)
 
     def _on_disconnect(self, client, userdata, flags, rc, properties=None):
         if self._running:
-            log.warning("Printer monitor disconnected (rc=%d), will auto-reconnect", rc)
+            log.warning("Printer monitor disconnected (rc=%s), will auto-reconnect", rc)
 
     def _on_message(self, client, userdata, msg):
         """Handle MQTT message — runs in paho's thread, schedule async work."""
