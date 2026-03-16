@@ -122,11 +122,14 @@ async def _run_dual(settings, log) -> None:
             # Broadcast notifications to both Telegram and Feishu
             if has_feishu:
                 async def _monitor_notify(cid: int, text: str) -> None:
-                    await _send_message(cid, text)
+                    try:
+                        await _send_message(cid, text)
+                    except Exception:
+                        log.warning("Telegram monitor notify failed", exc_info=True)
                     try:
                         await feishu_bot._send_message(cid, text)
                     except Exception:
-                        log.debug("Feishu monitor notify failed", exc_info=True)
+                        log.warning("Feishu monitor notify failed", exc_info=True)
             else:
                 _monitor_notify = _send_message
 
