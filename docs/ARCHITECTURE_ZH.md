@@ -227,7 +227,47 @@ Telegram 消息 → 内置 LLM 提示词优化
 
 ---
 
-## 10. 文件流转
+## 10. 打印监控与通知
+
+后台 **PrinterMonitor** 订阅打印机的 MQTT 消息流，对所有打印事件发送实时通知——无论是流水线触发的还是在 Bambu Studio 中手动启动的。
+
+### 监控事件
+
+| 事件 | 触发条件 | 通知内容 |
+|------|---------|---------|
+| **开始打印** | 状态变为 `RUNNING` | 任务名称、预计时间 |
+| **打印进度** | 每 N%（可配置） | 百分比、剩余时间 |
+| **打印完成** | `RUNNING` → `FINISH` | 总耗时 |
+| **打印失败** | 状态变为 `FAILED` | 错误详情 |
+| **打印暂停** | `RUNNING` → `PAUSE` | 暂停原因 |
+| **HMS 告警** | 硬件/固件告警 | 告警代码 + 描述 |
+
+### 双通道通知
+
+- **Telegram**（ybcc）— 通过 `python-telegram-bot` + ClashX 代理
+- **飞书**（chuan）— 通过飞书开放平台 API + ClashX 代理
+
+两个通道独立运行，任一通道失败不影响另一个。
+
+### macOS 部署：MQTT TLS 代理
+
+在 macOS 上，Homebrew 安装的 Python 因 **本地网络隐私保护（TCC）** 无法访问局域网设备。流水线通过 TLS 终端代理绕过此限制：
+
+```
+流水线 (brew Python) ──明文TCP──▶ MQTT 代理 (系统 Python) ──TLS──▶ 打印机:8883
+     localhost:18883                /usr/bin/python3
+```
+
+**注意：** 代理必须作为独立的 **launchd agent** 运行，不能作为流水线的子进程。macOS 会将父进程的局域网限制继承给子进程。
+
+| 组件 | launchd 标签 | 运行方式 |
+|------|-------------|---------|
+| 流水线 | `com.openclaw-3dprint.pipeline` | `run-pipeline.zsh` → brew Python 虚拟环境 |
+| MQTT 代理 | `com.openclaw-3dprint.mqtt-proxy` | `/usr/bin/python3 scripts/mqtt-proxy.py` |
+
+---
+
+## 11. 文件流转
 
 ```
 用户提示词 (文本)

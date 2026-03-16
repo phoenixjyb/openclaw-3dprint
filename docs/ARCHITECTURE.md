@@ -227,7 +227,47 @@ Terminal → `3dprint request --enriched "a cute cat with solid base" descriptio
 
 ---
 
-## 10. File Flow
+## 10. Printer Monitor & Notifications
+
+A background **PrinterMonitor** subscribes to the printer's MQTT feed and sends real-time notifications for *all* print events — whether triggered by the pipeline or started manually from Bambu Studio.
+
+### Monitored Events
+
+| Event | Trigger | Notification |
+|-------|---------|-------------|
+| **Print started** | State change → `RUNNING` | Job name, estimated time |
+| **Progress** | Every N% (configurable) | Percentage, time remaining |
+| **Print finished** | `RUNNING` → `FINISH` | Total time, success |
+| **Print failed** | State → `FAILED` | Error details |
+| **Print paused** | `RUNNING` → `PAUSE` | Pause reason |
+| **HMS alert** | Hardware/firmware alert | Alert code + description |
+
+### Dual Notification Channels
+
+- **Telegram** (ybcc) — via `python-telegram-bot` + ClashX proxy
+- **Feishu** (chuan) — via Feishu Open API + ClashX proxy
+
+Both channels fire independently; a failure in one does not block the other.
+
+### macOS Deployment: MQTT TLS Proxy
+
+On macOS, Homebrew Python is blocked from reaching LAN devices by **Local Network Privacy** (TCC). The pipeline works around this with a TLS-terminating TCP proxy:
+
+```
+Pipeline (brew Python)  ──plain TCP──▶  MQTT Proxy (system Python)  ──TLS──▶  Printer:8883
+    localhost:18883                        /usr/bin/python3
+```
+
+**Critical:** The proxy must run as an **independent launchd agent**, not as a subprocess of the pipeline. macOS inherits LAN restrictions from parent to child processes, so even `/usr/bin/python3` is blocked when spawned by brew Python.
+
+| Component | launchd label | Managed by |
+|-----------|--------------|------------|
+| Pipeline | `com.openclaw-3dprint.pipeline` | `run-pipeline.zsh` → brew Python venv |
+| MQTT Proxy | `com.openclaw-3dprint.mqtt-proxy` | `/usr/bin/python3 scripts/mqtt-proxy.py` |
+
+---
+
+## 11. File Flow
 
 ```
 User prompt (text)

@@ -205,6 +205,21 @@ The pipeline will SSH to the Windows machine, slice there, and copy back the res
 Multiple users/agents can share one printer safely. The pipeline uses cross-process file locking
 (`fcntl.flock`) to serialise print jobs. Users see their queue position while waiting.
 
+## Printer Monitor & Notifications
+
+A background monitor subscribes to the printer's MQTT feed and sends real-time notifications for *all* print events — whether triggered by the pipeline or started manually.
+
+| Channel | Recipient | Events |
+|---------|-----------|--------|
+| Telegram | ybcc | Start, progress, finish, error, HMS alerts |
+| Feishu | chuan | Same — both fire independently |
+
+Configure with `MONITOR_CHAT_ID`, `PRINTER_MONITOR_ENABLED`, and `PRINTER_MONITOR_PROGRESS_PCT` in your `.env`.
+
+> **macOS note:** On macOS, Homebrew Python cannot reach LAN devices (Local Network Privacy).
+> The pipeline uses a TLS-terminating proxy (`scripts/mqtt-proxy.py`) running under system Python
+> as a separate launchd agent. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) §10 for details.
+
 ## Project Structure
 
 ```
@@ -214,7 +229,9 @@ openclaw-3dprint/
 ├── pyproject.toml              # Python package config
 ├── .env.example                # Config template
 ├── scripts/
-│   └── 3dprint                 # CLI wrapper for agents
+│   ├── 3dprint                 # CLI wrapper for agents
+│   ├── mqtt-proxy.py           # TLS-terminating MQTT proxy (macOS LAN workaround)
+│   └── run-pipeline.zsh        # launchd entry point
 ├── pipeline/
 │   ├── __main__.py             # Entry point
 │   ├── orchestrator.py         # Pipeline coordinator
@@ -229,7 +246,8 @@ openclaw-3dprint/
 │   │   ├── tripo_client.py     # Tripo3D mesh generation
 │   │   ├── meshy_client.py     # Meshy.ai mesh generation
 │   │   ├── bambu_printer.py    # Direct FTPS + MQTT to printer
-│   │   └── bambu_mqtt.py       # MQTT protocol helpers
+│   │   ├── bambu_mqtt.py       # MQTT protocol helpers
+│   │   └── printer_monitor.py  # Background MQTT printer monitor + notifications
 │   ├── stages/
 │   │   ├── llm_interpret.py    # Stage 1: prompt enrichment
 │   │   ├── mesh_generate.py    # Stage 2: 3D model generation
