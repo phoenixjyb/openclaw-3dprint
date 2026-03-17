@@ -22,12 +22,21 @@ async def upload_file_ftp(
     printer_ip: str,
     access_code: str,
     local_path: str,
+    ftp_proxy_url: str = "",
 ) -> str:
     """Upload a .3mf file to the printer via implicit FTPS (port 990).
+
+    If ftp_proxy_url is set (e.g. "http://127.0.0.1:18990"), the upload
+    is delegated to the FTP upload proxy service (system Python, bypasses
+    macOS LNP restrictions).  Otherwise, connects directly via FTPS.
 
     Returns the remote filename (basename) on success.
     """
     filename = Path(local_path).name
+
+    if ftp_proxy_url:
+        return await _upload_via_proxy(ftp_proxy_url, local_path, filename,
+                                       printer_ip, access_code)
 
     def _upload():
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -39,15 +48,16 @@ async def upload_file_ftp(
         ftp.login("bblp", access_code)
         ftp.prot_p()
 
+        # X1C has /cache; P2S uses USB root /
         try:
             ftp.cwd("/cache")
+            remote_path = f"/cache/{filename}"
         except ftplib.error_perm:
-            ftp.mkd("/cache")
-            ftp.cwd("/cache")
+            remote_path = f"/{filename}"
 
-        log.info("FTPS uploading %s → /cache/%s", local_path, filename)
+        log.info("FTPS uploading %s → %s", local_path, remote_path)
         with open(local_path, "rb") as f:
-            ftp.storbinary(f"STOR {filename}", f)
+            ftp.storbinary(f"STOR {remote_path}", f)
 
         ftp.quit()
         log.info("FTPS upload complete: %s", filename)
@@ -57,13 +67,46 @@ async def upload_file_ftp(
     return await loop.run_in_executor(None, _upload)
 
 
+async def _upload_via_proxy(proxy_url: str, filepath: str, filename: str,
+                            printer_ip: str, access_code: str) -> str:
+    """Delegate FTP upload to the localhost proxy service."""
+    import urllib.request
+
+    payload = json.dumps({
+        "filepath": filepath,
+        "filename": filename,
+        "printer_ip": printer_ip,
+        "access_code": access_code,
+    }).encode()
+
+    url = proxy_url.rstrip("/") + "/upload"
+    req = urllib.request.Request(url, data=payload,
+                                headers={"Content-Type": "application/json"})
+
+    def _do():
+        resp = urllib.request.urlopen(req, timeout=120)
+        body = json.loads(resp.read())
+        if not body.get("ok"):
+            raise RuntimeError(f"FTP proxy error: {body}")
+        log.info("FTP proxy upload complete: %s", body.get("filename"))
+        return body["filename"]
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _do)
+
+
 async def start_print_mqtt(
     printer_ip: str,
     access_code: str,
     serial: str,
     filename: str,
+    mqtt_proxy_port: int = 0,
 ) -> None:
-    """Send a print-start command via MQTT (port 8883, TLS)."""
+    """Send a print-start command via MQTT (port 8883, TLS).
+
+    If mqtt_proxy_port > 0, connect to localhost:mqtt_proxy_port (plain TCP)
+    instead of printer_ip:8883 (TLS).  The proxy handles TLS termination.
+    """
     try:
         import paho.mqtt.client as mqtt
     except ImportError:
@@ -72,14 +115,19 @@ async def start_print_mqtt(
     connected = asyncio.Event()
     error_msg: list[str] = []
 
+    use_proxy = mqtt_proxy_port > 0
+    host = "127.0.0.1" if use_proxy else printer_ip
+    port = mqtt_proxy_port if use_proxy else 8883
+
     def _send():
         client = mqtt.Client(
             client_id=f"openclaw_{int(time.time())}",
             protocol=mqtt.MQTTv311,
         )
         client.username_pw_set("bblp", access_code)
-        client.tls_set(cert_reqs=ssl.CERT_NONE)
-        client.tls_insecure_set(True)
+        if not use_proxy:
+            client.tls_set(cert_reqs=ssl.CERT_NONE)
+            client.tls_insecure_set(True)
 
         def on_connect(c, userdata, flags, rc):
             if rc != 0:
@@ -103,7 +151,7 @@ async def start_print_mqtt(
             connected.set()
 
         client.on_connect = on_connect
-        client.connect(printer_ip, 8883, keepalive=60)
+        client.connect(host, port, keepalive=60)
         client.loop_start()
 
         # Wait for connection + publish

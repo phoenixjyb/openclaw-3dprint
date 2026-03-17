@@ -85,6 +85,11 @@ class Settings(BaseSettings):
         default="ftp",
         description="'ftp' (direct FTPS from Mac) or 'studio' (Bambu Studio CLI on Windows)",
     )
+    bambu_ftp_proxy_url: str = Field(
+        default="",
+        description="If set, delegate FTPS uploads to this localhost proxy (e.g. http://127.0.0.1:18990). "
+                    "Required on macOS launchd where brew Python can't reach LAN.",
+    )
 
     # ── Printer monitor ───────────────────────────────────────────
     printer_monitor_enabled: bool = Field(

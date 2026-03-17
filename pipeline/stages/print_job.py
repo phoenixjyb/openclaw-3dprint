@@ -28,6 +28,7 @@ async def _send_via_ftp(job: PrintJob, settings: Settings) -> None:
         printer_ip=settings.bambu_printer_ip,
         access_code=settings.bambu_printer_access_code,
         local_path=sliced_path,
+        ftp_proxy_url=settings.bambu_ftp_proxy_url,
     )
 
     await start_print_mqtt(
@@ -35,6 +36,7 @@ async def _send_via_ftp(job: PrintJob, settings: Settings) -> None:
         access_code=settings.bambu_printer_access_code,
         serial=settings.bambu_printer_serial,
         filename=filename,
+        mqtt_proxy_port=settings.printer_mqtt_proxy_port,
     )
     log.info("Print started via FTP+MQTT: %s", filename)
 
