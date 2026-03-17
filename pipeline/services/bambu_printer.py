@@ -140,7 +140,7 @@ async def start_print_mqtt(
                     "command": "project_file",
                     "param": "Metadata/plate_1.gcode",
                     "subtask_name": filename,
-                    "url": f"ftp://{filename}",
+                    "url": f"file:///sdcard/{filename}",
                     "file": "",
                     "md5": "",
                     "timelapse": False,
