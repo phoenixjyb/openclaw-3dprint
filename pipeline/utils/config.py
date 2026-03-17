@@ -59,6 +59,10 @@ class Settings(BaseSettings):
         default="local",
         description="'local' (PrusaSlicer on this machine) or 'remote' (Bambu Studio on Windows)",
     )
+    slicer_type: str = Field(
+        default="prusaslicer",
+        description="'prusaslicer' or 'orcaslicer' — controls CLI flag syntax for local mode",
+    )
     slicer_path: str = Field(
         default="/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer",
         description="Path to slicer binary (local mode)",

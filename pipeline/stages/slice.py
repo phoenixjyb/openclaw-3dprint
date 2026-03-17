@@ -52,17 +52,39 @@ async def _run_local(job: PrintJob, settings: Settings) -> str:
     input_path = Path(model_path)
     output_3mf = input_path.with_suffix(".3mf")
 
-    # Build slicer CLI command
-    cmd_parts = [settings.slicer_path, "--export-3mf", "-o", str(output_3mf)]
+    slicer_type = settings.slicer_type.lower()
 
-    if settings.slicer_printer_profile:
-        cmd_parts.extend(["--load", settings.slicer_printer_profile])
-    if settings.slicer_filament_profile:
-        cmd_parts.extend(["--load", settings.slicer_filament_profile])
-    if settings.slicer_process_profile:
-        cmd_parts.extend(["--load", settings.slicer_process_profile])
+    if slicer_type == "orcaslicer":
+        # OrcaSlicer CLI: --slice 0 --export-3mf output.3mf [--load-settings "p;q"] [--load-filaments f] input
+        cmd_parts = [settings.slicer_path]
 
-    cmd_parts.append(str(input_path))
+        settings_files = []
+        if settings.slicer_printer_profile:
+            settings_files.append(settings.slicer_printer_profile)
+        if settings.slicer_process_profile:
+            settings_files.append(settings.slicer_process_profile)
+        if settings_files:
+            cmd_parts.extend(["--load-settings", ";".join(settings_files)])
+        if settings.slicer_filament_profile:
+            cmd_parts.extend(["--load-filaments", settings.slicer_filament_profile])
+
+        cmd_parts.extend([
+            "--slice", "0",
+            "--export-3mf", str(output_3mf),
+            str(input_path),
+        ])
+    else:
+        # PrusaSlicer CLI: --export-3mf -o output.3mf [--load profile]... input
+        cmd_parts = [settings.slicer_path, "--export-3mf", "-o", str(output_3mf)]
+
+        if settings.slicer_printer_profile:
+            cmd_parts.extend(["--load", settings.slicer_printer_profile])
+        if settings.slicer_filament_profile:
+            cmd_parts.extend(["--load", settings.slicer_filament_profile])
+        if settings.slicer_process_profile:
+            cmd_parts.extend(["--load", settings.slicer_process_profile])
+
+        cmd_parts.append(str(input_path))
 
     log.info("Local slicer command: %s", " ".join(cmd_parts))
 
@@ -110,6 +132,10 @@ async def _run_remote(job: PrintJob, settings: Settings) -> str:
         process_json = f'"{profiles_dir}\\\\process\\\\{settings.slicer_process_profile}.json"'
         cmd_parts.append(f"--load-settings {process_json}")
 
+    # Scale Tripo models (they output in meters; slicer reads as mm → ~100x for printable size)
+    if settings.mesh_provider.lower() == "tripo":
+        cmd_parts.append("--scale 100")
+
     cmd_parts.extend([
         "--slice 0",
         f'--export-3mf "{output_3mf}"',
@@ -119,7 +145,14 @@ async def _run_remote(job: PrintJob, settings: Settings) -> str:
     cmd = " ".join(cmd_parts)
     log.info("Remote slicer command: %s", cmd)
 
-    def _do_slice():
+    # Determine local path for downloading the sliced file
+    if job.artifacts.model_local_path:
+        local_dir = Path(job.artifacts.model_local_path).parent
+    else:
+        local_dir = Path(settings.staging_dir) / job.id
+    local_3mf = str(local_dir / output_3mf.name)
+
+    def _do_slice_and_download():
         with WindowsSSH(
             host=settings.windows_host,
             user=settings.windows_user,
@@ -128,10 +161,17 @@ async def _run_remote(job: PrintJob, settings: Settings) -> str:
             connect_timeout=settings.windows_connect_timeout,
         ) as ssh:
             stdout, stderr, exit_code = ssh.exec(cmd, timeout=600)
+            if exit_code != 0:
+                return stdout, stderr, exit_code
+
+            # Download sliced .3mf back to Mac for FTP upload to printer
+            remote_sftp_path = str(output_3mf).replace("\\", "/")
+            ssh.download_file(remote_sftp_path, local_3mf)
+            log.info("Downloaded sliced file to %s", local_3mf)
             return stdout, stderr, exit_code
 
     stdout, stderr, exit_code = (
-        await asyncio.get_event_loop().run_in_executor(None, _do_slice)
+        await asyncio.get_event_loop().run_in_executor(None, _do_slice_and_download)
     )
 
     if exit_code != 0:
@@ -140,7 +180,7 @@ async def _run_remote(job: PrintJob, settings: Settings) -> str:
         )
 
     info = _parse_slice_output(stdout + "\n" + stderr)
-    return _finalize(job, str(output_3mf), info)
+    return _finalize(job, local_3mf, info)
 
 
 def _finalize(job: PrintJob, output_path: str, info: dict) -> str:

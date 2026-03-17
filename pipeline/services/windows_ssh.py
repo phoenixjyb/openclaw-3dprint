@@ -89,6 +89,21 @@ class WindowsSSH:
         finally:
             sftp.close()
 
+    def download_file(self, remote_path: str, local_path: str) -> None:
+        """SCP download a file from the remote machine."""
+        if not self._client:
+            self.connect()
+        assert self._client is not None
+
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        sftp = self._client.open_sftp()
+        try:
+            log.info("SFTP download: %s → %s", remote_path, local_path)
+            sftp.get(remote_path, local_path)
+            log.info("Download complete.")
+        finally:
+            sftp.close()
+
     def ensure_directory(self, remote_dir: str) -> None:
         """Create a directory on Windows if it doesn't exist."""
         cmd = f"powershell -Command \"New-Item -ItemType Directory -Force -Path '{remote_dir}'\""
