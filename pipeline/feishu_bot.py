@@ -124,11 +124,16 @@ class FeishuBot:
         # pass it through to skip the built-in LLM interpretation stage.
         enriched_prompt = body.get("enriched_prompt", "").strip() or None
 
+        # If a model file already exists on disk (e.g. retry after failure),
+        # pass it through to skip mesh generation.
+        model_path = body.get("model_path", "").strip() or None
+
         job = self.orchestrator.create_job(
             user_id=0,
             chat_id=0,
             raw_request=prompt,
             enriched_prompt=enriched_prompt,
+            model_path=model_path,
         )
 
         asyncio.create_task(self.orchestrator.run_pipeline(job))

@@ -40,13 +40,17 @@ class Orchestrator:
         self.printer_queue = printer_queue or get_printer_queue()
 
     def create_job(self, user_id: int, chat_id: int, raw_request: str,
-                   enriched_prompt: str | None = None) -> PrintJob:
+                   enriched_prompt: str | None = None,
+                   model_path: str | None = None) -> PrintJob:
         job = PrintJob(user_id=user_id, chat_id=chat_id, raw_request=raw_request)
         if enriched_prompt:
             job.artifacts.enriched_prompt = enriched_prompt
             job.artifacts.object_name = raw_request[:80]
+        if model_path:
+            job.artifacts.model_local_path = model_path
         self.jobs[job.id] = job
-        log.info("Created job %s: %r (enriched=%s)", job.id, raw_request, bool(enriched_prompt))
+        log.info("Created job %s: %r (enriched=%s, model=%s)",
+                 job.id, raw_request, bool(enriched_prompt), bool(model_path))
         return job
 
     async def resolve_approval(self, job_id: str, approved: bool) -> None:
@@ -107,25 +111,33 @@ class Orchestrator:
                     )
                     return
 
-            # ── Stage: 3D Model Generation ───────────────────────────
-            await self.send_message(job.chat_id, "Stage 2: Generating 3D model… ⏳")
-
-            async def _mesh_progress(status, progress):
-                if progress % 25 == 0:
-                    await self.send_message(job.chat_id, f"🔄 Mesh gen: {status} ({progress}%)")
-
-            summary, thumbnail = await mesh_generate.run(job, self.settings, _mesh_progress)
-
-            if thumbnail:
-                await self.send_photo(job.chat_id, thumbnail, summary)
-            approval_text = "Approve the model above?" if thumbnail else summary
-            approved = await self._wait_for_approval(job, approval_text)
-            if not approved:
-                job.advance(JobStage.CANCELLED)
+            # ── Stage: 3D Model Generation (skip if model already provided) ──
+            if job.artifacts.model_local_path:
+                log.info("Job %s: skipping mesh gen — model already at %s",
+                         job.id, job.artifacts.model_local_path)
                 await self.send_message(
-                    job.chat_id, f"❌ Job `{job.id}` cancelled at model generation."
+                    job.chat_id,
+                    "Stage 2: 3D model already provided — skipping generation ✅",
                 )
-                return
+            else:
+                await self.send_message(job.chat_id, "Stage 2: Generating 3D model… ⏳")
+
+                async def _mesh_progress(status, progress):
+                    if progress % 25 == 0:
+                        await self.send_message(job.chat_id, f"🔄 Mesh gen: {status} ({progress}%)")
+
+                summary, thumbnail = await mesh_generate.run(job, self.settings, _mesh_progress)
+
+                if thumbnail:
+                    await self.send_photo(job.chat_id, thumbnail, summary)
+                approval_text = "Approve the model above?" if thumbnail else summary
+                approved = await self._wait_for_approval(job, approval_text)
+                if not approved:
+                    job.advance(JobStage.CANCELLED)
+                    await self.send_message(
+                        job.chat_id, f"❌ Job `{job.id}` cancelled at model generation."
+                    )
+                    return
 
             # ── Stage: Windows Transfer (remote mode only) ───────────
             if slicer_mode == "remote":
