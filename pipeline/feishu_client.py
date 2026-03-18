@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from pathlib import Path
@@ -54,7 +55,7 @@ class FeishuClient:
             json={
                 "receive_id": chat_id,
                 "msg_type": "text",
-                "content": f'{{"text":"{_escape_json(text)}"}}',
+                "content": json.dumps({"text": text}),
             },
         )
         data = resp.json()
@@ -67,8 +68,6 @@ class FeishuClient:
 
     async def send_rich_text(self, chat_id: str, title: str, content: str) -> str:
         """Send a rich-text (post) message."""
-        import json
-
         headers = await self._headers()
         post_body = {
             "zh_cn": {
@@ -117,8 +116,6 @@ class FeishuClient:
 
         image_key = data["data"]["image_key"]
 
-        import json
-
         resp = await self._http.post(
             f"{FEISHU_BASE}/im/v1/messages",
             params={"receive_id_type": "chat_id"},
@@ -139,13 +136,3 @@ class FeishuClient:
 
     async def close(self) -> None:
         await self._http.aclose()
-
-
-def _escape_json(text: str) -> str:
-    """Escape text for embedding in a JSON string value."""
-    return (
-        text.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", "\\n")
-        .replace("\t", "\\t")
-    )

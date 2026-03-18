@@ -49,8 +49,8 @@ class FeishuBot:
         clean = _strip_markdown(text)
         try:
             await self.feishu.send_text(self.chat_id, clean)
-        except Exception as e:
-            log.error("Feishu send_message failed: %s", e)
+        except Exception:
+            log.exception("Feishu send_message failed")
 
     async def _send_photo(
         self, chat_id: int, photo_path: str, caption: str
@@ -63,8 +63,8 @@ class FeishuBot:
                 )
             else:
                 await self.feishu.send_text(self.chat_id, clean)
-        except Exception as e:
-            log.error("Feishu send_photo failed: %s", e)
+        except Exception:
+            log.exception("Feishu send_photo failed")
 
     async def _request_approval(
         self, chat_id: int, job_id: str, text: str
@@ -78,8 +78,8 @@ class FeishuBot:
         )
         try:
             await self.feishu.send_text(self.chat_id, approval_msg)
-        except Exception as e:
-            log.error("Feishu request_approval failed: %s", e)
+        except Exception:
+            log.exception("Feishu request_approval failed")
 
     def _build_app(self) -> web.Application:
         app = web.Application()
