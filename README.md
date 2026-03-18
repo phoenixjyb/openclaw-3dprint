@@ -10,7 +10,7 @@ natural language → LLM interpretation → 3D model generation → slicing → 
 ```
 User: "3D print me a small cinderella figurine"
   ↓
-Pipeline: LLM enrichment → Tripo3D mesh → PrusaSlicer → Bambu P2S printer
+Pipeline: LLM enrichment → Tripo3D mesh → OrcaSlicer / PrusaSlicer → Bambu P2S printer
   ↓
 Result: Physical object on your print bed 🎉
 ```
@@ -33,7 +33,7 @@ Result: Physical object on your print bed 🎉
 └────────┬─────────┘
          ▼  (approval)
 ┌──────────────────┐
-│  Slice           │  PrusaSlicer (local) or Bambu Studio (remote)
+│  Slice           │  OrcaSlicer / PrusaSlicer (local) or Bambu Studio (remote)
 │  3D model → gcode│  → .3mf file with print instructions
 └────────┬─────────┘
          ▼  (approval)
@@ -48,8 +48,8 @@ Result: Physical object on your print bed 🎉
 | Requirement | Version | How to get it |
 |-------------|---------|---------------|
 | **Python** | ≥ 3.11 | `brew install python@3.12` or [python.org](https://www.python.org/downloads/) |
-| **PrusaSlicer** | any | `brew install --cask prusa-slicer` (macOS) or [download](https://www.prusa3d.com/page/prusaslicer_424/) |
-| **Bambu Lab printer** | any | Must be on the same LAN with LAN mode enabled |
+| **Slicer** | any | OrcaSlicer (`brew install --cask orcaslicer`) or PrusaSlicer (`brew install --cask prusa-slicer`) |
+| **Bambu Lab printer** | any | Must be on the same LAN |
 | **LLM API key** | — | Any OpenAI-compatible provider: [OpenAI](https://platform.openai.com/api-keys), [xAI/Grok](https://console.x.ai), [Anthropic](https://console.anthropic.com/), etc. |
 | **Tripo3D API key** | — | Sign up at [tripo3d.ai](https://www.tripo3d.ai) → Dashboard → API Keys |
 | **A chat channel** | — | Pick one: [Telegram BotFather](https://t.me/BotFather), [Feishu](https://open.feishu.cn/app), or just the HTTP API |
@@ -82,13 +82,14 @@ pip install "openclaw-3dprint[dev]"          # + pytest, ruff for development
 
 > If you prefer `requirements.txt`: `pip install -r requirements.txt`
 
-### 2. Install PrusaSlicer (for local slicing)
+### 2. Install a Slicer (for local slicing)
 
 ```bash
-# macOS
-brew install --cask prusa-slicer
+# OrcaSlicer (recommended for Bambu printers — generates native .3mf with thumbnails)
+brew install --cask orcaslicer
 
-# Linux — download from https://www.prusa3d.com/page/prusaslicer_424/
+# PrusaSlicer (alternative)
+brew install --cask prusa-slicer
 ```
 
 ### 3. Configure
@@ -173,8 +174,12 @@ If you use [OpenClaw](https://openclaw.ai), this package works as a skill:
 | `MESH_PROVIDER` | No | `tripo` | `tripo` or `meshy` |
 | `TRIPO_API_KEY` | Yes* | — | Tripo3D key (*if using tripo) |
 | `MESHY_API_KEY` | Yes* | — | Meshy.ai key (*if using meshy) |
-| `SLICER_MODE` | No | `local` | `local` (PrusaSlicer) or `remote` (SSH to Windows) |
+| `SLICER_MODE` | No | `local` | `local` (OrcaSlicer/PrusaSlicer) or `remote` (SSH to Windows) |
+| `SLICER_TYPE` | No | `prusaslicer` | `prusaslicer` or `orcaslicer` — controls CLI flag syntax |
 | `SLICER_PATH` | No | auto-detect | Path to slicer binary |
+| `SLICER_PRINTER_PROFILE` | No | — | Path to printer profile JSON (OrcaSlicer: full config required) |
+| `SLICER_FILAMENT_PROFILE` | No | — | Path to filament profile JSON |
+| `SLICER_PROCESS_PROFILE` | No | — | Path to process/print profile JSON |
 | `BAMBU_PRINTER_IP` | **Yes** | — | Printer IP on LAN |
 | `BAMBU_PRINTER_SERIAL` | **Yes** | — | Printer serial number |
 | `BAMBU_PRINTER_ACCESS_CODE` | **Yes** | — | Printer access code |
@@ -284,11 +289,17 @@ pytest tests/ -q
 ## Supported Printers
 
 Currently tested with:
-- **Bambu Lab P1S / P1P** — via FTPS (port 990) + MQTT (port 8883)
+- **Bambu Lab P2S** — via FTPS (port 990) + MQTT (port 8883)
+- **Bambu Lab P1S / P1P** — same protocol
 - **Bambu Lab X1 / X1C** — same protocol
 
-Any Bambu Lab printer with LAN mode enabled should work. The printer must be on the same
-network as the machine running the pipeline.
+Any Bambu Lab printer on the same LAN should work. For automated print triggering via MQTT,
+the printer needs **LAN Developer Mode** enabled (Settings → Network on the printer LCD).
+Without it, the pipeline can still upload files via FTP — start the print manually from the LCD.
+
+> **Note on Tripo3D models:** Tripo outputs meshes in meters. The pipeline automatically
+> pre-scales STL vertices ×100 before slicing (done in Python, not via slicer `--scale` flag,
+> which crashes on some platforms).
 
 ## License
 
