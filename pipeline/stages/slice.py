@@ -10,12 +10,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import struct
 from pathlib import Path, PureWindowsPath
 
 from pipeline.models.job import JobStage, PrintJob
 from pipeline.utils.config import Settings
 
 log = logging.getLogger(__name__)
+
+# Tripo3D outputs models in meters; slicers read as mm.
+_TRIPO_SCALE_FACTOR = 100
 
 
 def _parse_slice_output(stdout: str) -> dict:
@@ -43,6 +47,36 @@ def _parse_slice_output(stdout: str) -> dict:
     return info
 
 
+def _prescale_stl(stl_path: Path, scale: float) -> Path:
+    """Scale a binary STL file in-place by modifying vertex coordinates.
+
+    OrcaSlicer's --scale flag can crash on Apple Silicon, so we pre-scale
+    the STL vertices directly. Works with binary STL only (which is what
+    Tripo3D and most mesh generators output).
+    """
+    data = stl_path.read_bytes()
+    header = data[:80]
+    n_triangles = struct.unpack_from("<I", data, 80)[0]
+    expected = 84 + n_triangles * 50
+    if len(data) != expected:
+        log.warning("STL size mismatch (ascii?), skipping pre-scale")
+        return stl_path
+
+    out = bytearray(data)
+    for i in range(n_triangles):
+        base = 84 + i * 50
+        # Skip normal (12 bytes), scale 3 vertices (9 floats = 36 bytes)
+        for j in range(3, 12):  # float indices 3..11 (vertices)
+            offset = base + j * 4
+            val = struct.unpack_from("<f", out, offset)[0]
+            struct.pack_into("<f", out, offset, val * scale)
+
+    scaled_path = stl_path.with_stem(stl_path.stem + "_scaled")
+    scaled_path.write_bytes(bytes(out))
+    log.info("Pre-scaled STL ×%s → %s", scale, scaled_path)
+    return scaled_path
+
+
 async def _run_local(job: PrintJob, settings: Settings) -> str:
     """Slice using a local slicer binary (PrusaSlicer / OrcaSlicer)."""
     model_path = job.artifacts.model_local_path
@@ -50,6 +84,14 @@ async def _run_local(job: PrintJob, settings: Settings) -> str:
         raise ValueError("No model file to slice")
 
     input_path = Path(model_path)
+
+    # Pre-scale Tripo models (meters → mm) before slicing.
+    # Done in Python because OrcaSlicer's --scale crashes on Apple Silicon.
+    if settings.mesh_provider.lower() == "tripo":
+        input_path = await asyncio.get_event_loop().run_in_executor(
+            None, _prescale_stl, input_path, _TRIPO_SCALE_FACTOR
+        )
+
     output_3mf = input_path.with_suffix(".3mf")
 
     slicer_type = settings.slicer_type.lower()
