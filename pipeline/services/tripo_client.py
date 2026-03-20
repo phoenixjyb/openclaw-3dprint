@@ -11,6 +11,43 @@ from tripo3d import TaskStatus, TripoClient
 log = logging.getLogger(__name__)
 
 
+def _patch_tripo_trust_env(client) -> None:
+    """Enable proxy support in the Tripo SDK's aiohttp session.
+
+    The SDK creates its aiohttp.ClientSession with trust_env=False,
+    so HTTPS_PROXY env vars are ignored. This patches the internal
+    client impl to recreate the session with trust_env=True.
+    """
+    try:
+        impl = client._impl
+        if hasattr(impl, "_session") and impl._session is not None:
+            import asyncio
+            asyncio.get_event_loop().run_until_complete(impl._session.close())
+            impl._session = None
+
+        orig_ensure = impl._ensure_session
+
+        async def _patched_ensure():
+            session = await orig_ensure()
+            if not session.trust_env:
+                import aiohttp
+                connector = session.connector
+                headers = dict(session.headers)
+                await session.close()
+                impl._session = aiohttp.ClientSession(
+                    trust_env=True,
+                    headers=headers,
+                    connector_owner=False,
+                    connector=connector,
+                )
+                return impl._session
+            return session
+
+        impl._ensure_session = _patched_ensure
+    except Exception as e:
+        log.warning("Could not patch Tripo SDK for proxy support: %s", e)
+
+
 @dataclass
 class TripoResult:
     task_id: str
@@ -31,6 +68,11 @@ async def generate_and_download(
     output_dir = str(staging_dir)
 
     async with TripoClient(api_key=api_key) as client:
+        # Patch aiohttp session to respect HTTPS_PROXY env var.
+        # The tripo3d SDK creates its session with trust_env=False by default,
+        # which breaks on hosts that require a proxy for outbound HTTPS.
+        _patch_tripo_trust_env(client)
+
         log.info("Tripo3D: creating text-to-model task for: %s", prompt[:100])
         task_id = await client.text_to_model(
             prompt=prompt,
